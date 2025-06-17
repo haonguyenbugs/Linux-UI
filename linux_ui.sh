@@ -3,7 +3,7 @@
 # Cách sử dụng file UI 
 # B1. Chạy script trong Linux
 # B2. Chạy lệnh 'menu' để vào giao diện hoặc 'sh' để đăng nhập lại UI
-# B3. Nhập 'uiexit' để thoát UI
+# B3. Nhập 'uiexit' hoặc '0' để thoát UI
 # B4. OK
 
 echo -e "\033[1;36m🔧 Đang cài đặt hệ thống menu lệnh tuỳ chỉnh...\033[0m"
@@ -281,7 +281,7 @@ def menu(data):
             identifier = input("Nhập số thứ tự cách nhau bằng dấu phẩy hoặc all để kill tất cả: ").strip()
             kill_sessions(identifier)
         elif c in ["0", "uiexit"]:
-            os.system("bash -c 'source ~/.bashrc && display_system_info'")
+            os.system("bash -i -c 'source ~/.bashrc && display_system_info'")
             break
         elif c.startswith("cd "):
             try:
@@ -300,7 +300,7 @@ def menu(data):
                 print(f"Lỗi khi thực thi: {e}")
 
 def shell():
-    os.system("bash -c 'source ~/.bashrc && display_system_info'")
+    os.system("bash -i -c 'source ~/.bashrc && display_system_info'")
     while True:
         data = load_data(COMMANDS_FILE)
         try:
@@ -312,8 +312,8 @@ def shell():
             continue
         elif inp == "menu":
             menu(data)
-        elif inp == "uiexit":
-            os.system("bash -c 'source ~/.bashrc && display_system_info'")
+        elif inp in ["uiexit", "0"]:
+            os.system("bash -i -c 'source ~/.bashrc && display_system_info'")
             break
         elif inp == "sh":
             shell()
@@ -430,15 +430,15 @@ if __name__ == "__main__":
     shell()
 EOF
 
-# Define display_system_info function in a temporary script to use immediately
+
 cat > /tmp/display_system_info.sh << 'EOF'
-banner="████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
+banner="""████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
 ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝      ██╔═══██╗██╔════╝
    ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝ █████╗██║   ██║███████╗
    ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗ ╚════╝██║   ██║╚════██║
    ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗      ╚██████╔╝███████║
    ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝       ╚═════╝ ╚══════╝
-                                                                            "
+                                                                            """
 
 ok=" - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
 
@@ -452,7 +452,7 @@ display_system_info() {
     users=$(who | wc -l)
     mem_usage=$(free -m | awk '/Mem:/ {printf "%.0f%%", $3/$2*100}')
     swap_usage=$(free -m | awk '/Swap:/ {if ($2 == 0) print "0%"; else printf "%.0f%%", $3/$2*100}')
-    ip=$(ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 || echo "N/A")
+    ip=$(ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 | head -n 1 || echo "N/A")
     echo "System load:  $load                Processes:               $processes"
     echo "Usage of /:   $disk_usage   Users logged in:         $users"
     echo "Memory usage: $mem_usage                 IPv4 address for ens160: $ip"
@@ -461,12 +461,19 @@ display_system_info() {
 }
 EOF
 
-# Source the temporary script to define display_system_info
+
 source /tmp/display_system_info.sh
 
-# Add to .bashrc
+
 sed -i '/# Custom lệnh từ file json/,+50d' ~/.bashrc
 cat >> ~/.bashrc << 'EOF'
+
+if [ -n "$BASH_VERSION" ]; then
+    if [ -f "$HOME/.bashrc" ]; then
+        . "$HOME/.bashrc"
+    fi
+fi
+
 function run_custom() {
   cmd=$(jq -r --arg k "$1" ".[\$k]" ~/.custom_commands.json 2>/dev/null)
   if [ "$cmd" != "null" ] && [ -n "$cmd" ]; then
@@ -486,7 +493,7 @@ function display_system_info() {
     users=$(who | wc -l)
     mem_usage=$(free -m | awk '/Mem:/ {printf "%.0f%%", $3/$2*100}')
     swap_usage=$(free -m | awk '/Swap:/ {if ($2 == 0) print "0%"; else printf "%.0f%%", $3/$2*100}')
-    ip=$(ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 || echo "N/A")
+    ip=$(ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 | head -n 1 || echo "N/A")
     echo "System load:  $load                Processes:               $processes"
     echo "Usage of /:   $disk_usage   Users logged in:         $users"
     echo "Memory usage: $mem_usage                 IPv4 address for ens160: $ip"
@@ -494,33 +501,25 @@ function display_system_info() {
     echo -e "$ok"
 }
 
-banner="████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
+banner="""████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
 ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝      ██╔═══██╗██╔════╝
    ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝ █████╗██║   ██║███████╗
    ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗ ╚════╝██║   ██║╚════██║
    ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗      ╚██████╔╝███████║
    ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝       ╚═════╝ ╚══════╝
-                                                                            "
+                                                                            """
 
 ok=" - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
-
 alias -s custom=run_custom
 alias menu='python3 ~/custom_menu.py'
 alias sh='python3 ~/custom_menu.py'
 EOF
-
-# Display system info on setup completion
 clear
 uptime
 source ~/.bashrc
 display_system_info
 echo -e "\033[1;32m✅ Cài đặt hoàn tất! Bạn có thể khởi động lại terminal để trải nghiệm giao diện shell hiện đại!\033[0m"
-echo -e "Nhập 'menu' hoặc 'sh' để vào UI, 'uiexit' để thoát UI."
-
-# Clean up temporary script
+echo -e "Nhập 'menu' hoặc 'sh' để vào UI, 'uiexit' hoặc '0' để thoát UI."
 rm -f /tmp/display_system_info.sh
-
-# Source .bashrc to ensure aliases and functions are available
 source ~/.bashrc
-
 exit
