@@ -219,28 +219,65 @@ def list_tmux_sessions():
     tmux_data = load_data(TMUX_CONFIG_FILE)
     tmux_procs = os.popen("tmux list-sessions 2>/dev/null").readlines()
     sessions = []
+    current_time = datetime.datetime.now().strftime("%H:%M - %Y/%m/%d")
+
     for idx, line in enumerate(tmux_procs, 1):
         session_name = line.split(':')[0]
-        created = tmux_data.get(session_name, {}).get("created", "Unknown")
-        activity = tmux_data.get(session_name, {}).get("activity", "Unknown")
-        gui_enabled = tmux_data.get(session_name, {}).get("gui_enabled", False)
+        
+        if session_name not in tmux_data:
+            tmux_data[session_name] = {
+                "created": current_time,
+                "command": "Unknown",
+                "gui_enabled": False
+            }
+        created = tmux_data[session_name].get("created", current_time)
+        
+        
+        pane_output = run_command(f"tmux capture-pane -t {session_name} -p 2>/dev/null").strip()
+        command = "Unknown"
+        try:
+            
+            pid = run_command(f"tmux list-panes -t {session_name} -F '#{{pane_pid}}' 2>/dev/null").strip()
+            if pid:
+                
+                cmd_output = run_command(f"ps -p {pid} -o comm= 2>/dev/null").strip()
+                if cmd_output:
+                    command = cmd_output
+                else:
+                    
+                    if "python" in pane_output.lower():
+                        command = "Python"
+                    elif "node" in pane_output.lower():
+                        command = "Node"
+                    elif "bash" in pane_output.lower():
+                        command = "Bash"
+        except:
+            pass
+        tmux_data[session_name]["command"] = command
+        
+        
         uptime = run_command(f"tmux display-message -p -t {session_name} '#{{session_activity}}' 2>/dev/null").strip()
         if uptime:
             try:
                 uptime = datetime.datetime.fromtimestamp(int(uptime)).strftime("%H:%M - %Y/%m/%d")
             except:
                 uptime = "Unknown"
-        sessions.append((session_name, created, activity, uptime, gui_enabled))
+        
+        gui_enabled = tmux_data[session_name].get("gui_enabled", False)
+        sessions.append((session_name, created, command, uptime, gui_enabled))
+    
+    
+    save_data(tmux_data, TMUX_CONFIG_FILE)
     
     if not sessions:
         print("ℹ️ Không có tmux session nào đang chạy.")
         return []
     
     print("\n📋 Danh sách tmux sessions:")
-    for idx, (name, created, activity, uptime, gui) in enumerate(sessions, 1):
+    for idx, (name, created, command, uptime, gui) in enumerate(sessions, 1):
         print(f"[{idx}] {name}")
         print(f" - Created: {created}")
-        print(f" - Activity: {activity}")
+        print(f" - Command: {command}")
         print(f" - Uptime: {uptime}")
         print(f" - Set Linux UI: {'Yes' if gui else 'No'}")
     return sessions
