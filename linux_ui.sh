@@ -35,6 +35,8 @@ fi
 cat > ~/custom_menu.py << 'EOF'
 import os
 import json
+import subprocess
+import shutil
 from pyfiglet import figlet_format
 from termcolor import colored
 
@@ -47,6 +49,49 @@ banner = """████████╗███████╗█████�
    ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗      ╚██████╔╝███████║
    ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝       ╚═════╝ ╚══════╝
                                                                             """
+
+ok = """ - Version: 1.2
+ - Lệnh hỗ trợ:
+    + menu: Danh sách lệnh tiện ích
+    + uiexit: Thoát UI
+    + sh: Đăng nhập lại UI
+    + tm --new: Tạo lệnh mới
+    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh
+    + tm --cmdlist: Danh sách lệnh
+    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ
+    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh
+    + tm --prompt: Thay prompt
+    + tm --reset: Reset dữ liệu
+    + tm --history [reset]: Xem hoặc reset lịch sử lệnh
+    + tm --kill [Số thứ tự/all]: Kill sessions/processes
+
+  -> Developer: Tran Hao Nguyen
+  -> Alias: Bugs
+  -> Description: Linux UI - Utilities,..."""
+
+def run_command(cmd):
+    try:
+        result = subprocess.run(cmd, shell=True, check=True, text=True, capture_output=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        return f"Error: {e.stderr}"
+
+def display_system_info():
+    os.system("clear")
+    print(banner)
+    os.system("neofetch")
+    load = run_command("uptime | awk -F 'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//'")
+    processes = run_command("ps aux | wc -l")
+    disk_usage = run_command("df -h / | tail -1 | awk '{print $5 \" of \" $2}'")
+    users = run_command("who | wc -l")
+    mem_usage = run_command("free -m | awk '/Mem:/ {printf \"%.0f%%\", $3/$2*100}'")
+    swap_usage = run_command("free -m | awk '/Swap:/ {if ($2 == 0) print \"0%\"; else printf \"%.0f%%\", $3/$2*100}'")
+    ip = run_command("ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 | head -n 1 || echo 'N/A'")
+    print(f"System load:  {load.strip():<18} Processes:               {processes.strip()}")
+    print(f"Usage of /:   {disk_usage.strip():<18} Users logged in:         {users.strip()}")
+    print(f"Memory usage: {mem_usage.strip():<18} IPv4 address for ens160: {ip.strip()}")
+    print(f"Swap usage:   {swap_usage.strip()}")
+    print(ok)
 
 def load_data(file_path):
     return json.load(open(file_path)) if os.path.exists(file_path) else {}
@@ -166,7 +211,6 @@ def hienthi():
     text_color = "\x1b[1;37m"
     reset = "\x1b[0m"
     box = []
-    ok = " - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
     box.append(f"{border_color}╔{'═' * (width - 2)}╗{reset}")
     box.append(f"{border_color}║{reset}{text_color}{title.center(width - 1)}{reset}{border_color}║{reset}")
     box.append(f"{border_color}╠{'═' * (width - 2)}╣{reset}")
@@ -197,7 +241,6 @@ def hienthi():
 def menu(data):
     while True:
         os.system("clear")
-        ok = " - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
         print(hienthi())
         c = input(get_pr()).strip()
 
@@ -281,7 +324,7 @@ def menu(data):
             identifier = input("Nhập số thứ tự cách nhau bằng dấu phẩy hoặc all để kill tất cả: ").strip()
             kill_sessions(identifier)
         elif c in ["0", "uiexit"]:
-            os.system("bash -i -c 'source ~/.bashrc && display_system_info'")
+            display_system_info()
             break
         elif c.startswith("cd "):
             try:
@@ -300,20 +343,22 @@ def menu(data):
                 print(f"Lỗi khi thực thi: {e}")
 
 def shell():
-    os.system("bash -i -c 'source ~/.bashrc && display_system_info'")
+    display_system_info()
     while True:
         data = load_data(COMMANDS_FILE)
         try:
             inp = input(get_pr()).strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nThoát shell."); break
+            print("\nThoát shell.")
+            display_system_info()
+            break
 
         if not inp:
             continue
         elif inp == "menu":
             menu(data)
         elif inp in ["uiexit", "0"]:
-            os.system("bash -i -c 'source ~/.bashrc && display_system_info'")
+            display_system_info()
             break
         elif inp == "sh":
             shell()
@@ -431,49 +476,8 @@ if __name__ == "__main__":
 EOF
 
 
-cat > /tmp/display_system_info.sh << 'EOF'
-banner="""████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
-╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝      ██╔═══██╗██╔════╝
-   ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝ █████╗██║   ██║███████╗
-   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗ ╚════╝██║   ██║╚════██║
-   ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗      ╚██████╔╝███████║
-   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝       ╚═════╝ ╚══════╝
-                                                                            """
-
-ok=" - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
-
-display_system_info() {
-    clear
-    echo "$banner"
-    neofetch
-    load=$(uptime | awk -F 'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
-    processes=$(ps aux | wc -l)
-    disk_usage=$(df -h / | tail -1 | awk '{print $5 " of " $2}')
-    users=$(who | wc -l)
-    mem_usage=$(free -m | awk '/Mem:/ {printf "%.0f%%", $3/$2*100}')
-    swap_usage=$(free -m | awk '/Swap:/ {if ($2 == 0) print "0%"; else printf "%.0f%%", $3/$2*100}')
-    ip=$(ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 | head -n 1 || echo "N/A")
-    echo "System load:  $load                Processes:               $processes"
-    echo "Usage of /:   $disk_usage   Users logged in:         $users"
-    echo "Memory usage: $mem_usage                 IPv4 address for ens160: $ip"
-    echo "Swap usage:   $swap_usage"
-    echo -e "$ok"
-}
-EOF
-
-
-source /tmp/display_system_info.sh
-
-
 sed -i '/# Custom lệnh từ file json/,+50d' ~/.bashrc
 cat >> ~/.bashrc << 'EOF'
-
-if [ -n "$BASH_VERSION" ]; then
-    if [ -f "$HOME/.bashrc" ]; then
-        . "$HOME/.bashrc"
-    fi
-fi
-
 function run_custom() {
   cmd=$(jq -r --arg k "$1" ".[\$k]" ~/.custom_commands.json 2>/dev/null)
   if [ "$cmd" != "null" ] && [ -n "$cmd" ]; then
@@ -483,43 +487,19 @@ function run_custom() {
   fi
 }
 
-function display_system_info() {
-    clear
-    echo "$banner"
-    neofetch
-    load=$(uptime | awk -F 'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
-    processes=$(ps aux | wc -l)
-    disk_usage=$(df -h / | tail -1 | awk '{print $5 " of " $2}')
-    users=$(who | wc -l)
-    mem_usage=$(free -m | awk '/Mem:/ {printf "%.0f%%", $3/$2*100}')
-    swap_usage=$(free -m | awk '/Swap:/ {if ($2 == 0) print "0%"; else printf "%.0f%%", $3/$2*100}')
-    ip=$(ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 | head -n 1 || echo "N/A")
-    echo "System load:  $load                Processes:               $processes"
-    echo "Usage of /:   $disk_usage   Users logged in:         $users"
-    echo "Memory usage: $mem_usage                 IPv4 address for ens160: $ip"
-    echo "Swap usage:   $swap_usage"
-    echo -e "$ok"
-}
-
-banner="""████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
-╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝      ██╔═══██╗██╔════╝
-   ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝ █████╗██║   ██║███████╗
-   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗ ╚════╝██║   ██║╚════██║
-   ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗      ╚██████╔╝███████║
-   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝       ╚═════╝ ╚══════╝
-                                                                            """
-
-ok=" - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
 alias -s custom=run_custom
 alias menu='python3 ~/custom_menu.py'
 alias sh='python3 ~/custom_menu.py'
 EOF
+
+
 clear
 uptime
-source ~/.bashrc
-display_system_info
+python3 ~/custom_menu.py display_system_info
 echo -e "\033[1;32m✅ Cài đặt hoàn tất! Bạn có thể khởi động lại terminal để trải nghiệm giao diện shell hiện đại!\033[0m"
 echo -e "Nhập 'menu' hoặc 'sh' để vào UI, 'uiexit' hoặc '0' để thoát UI."
-rm -f /tmp/display_system_info.sh
+
+
 source ~/.bashrc
+
 exit
