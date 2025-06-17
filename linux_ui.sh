@@ -281,7 +281,7 @@ def menu(data):
             identifier = input("Nhập số thứ tự cách nhau bằng dấu phẩy hoặc all để kill tất cả: ").strip()
             kill_sessions(identifier)
         elif c in ["0", "uiexit"]:
-            os.system("bash -c 'source ~/.bashrc; display_system_info'")
+            os.system("bash -c 'source ~/.bashrc && display_system_info'")
             break
         elif c.startswith("cd "):
             try:
@@ -300,7 +300,7 @@ def menu(data):
                 print(f"Lỗi khi thực thi: {e}")
 
 def shell():
-    os.system("bash -c 'source ~/.bashrc; display_system_info'")
+    os.system("bash -c 'source ~/.bashrc && display_system_info'")
     while True:
         data = load_data(COMMANDS_FILE)
         try:
@@ -313,7 +313,7 @@ def shell():
         elif inp == "menu":
             menu(data)
         elif inp == "uiexit":
-            os.system("bash -c 'source ~/.bashrc; display_system_info'")
+            os.system("bash -c 'source ~/.bashrc && display_system_info'")
             break
         elif inp == "sh":
             shell()
@@ -512,11 +512,15 @@ EOF
 # Display system info on setup completion
 clear
 uptime
+source ~/.bashrc
 display_system_info
 echo -e "\033[1;32m✅ Cài đặt hoàn tất! Bạn có thể khởi động lại terminal để trải nghiệm giao diện shell hiện đại!\033[0m"
 echo -e "Nhập 'menu' hoặc 'sh' để vào UI, 'uiexit' để thoát UI."
 
 # Clean up temporary script
 rm -f /tmp/display_system_info.sh
+
+# Source .bashrc to ensure aliases and functions are available
+source ~/.bashrc
 
 exit
