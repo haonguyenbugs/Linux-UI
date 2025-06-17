@@ -41,12 +41,11 @@ import json
 import subprocess
 import shutil
 import datetime
-import glob
 from pyfiglet import figlet_format
 from termcolor import colored
 
 COMMANDS_FILE = os.path.expanduser("~/.custom_commands.json")
-TMUX_UI_FILE = os.path.expanduser("~/.tmux_ui_config.json")
+TMUX_CONFIG_FILE = os.path.expanduser("~/.tmux_sessions.json")
 
 banner = """██╗     ██╗███╗   ██╗██╗   ██╗██╗  ██╗    ██╗   ██╗██╗
 ██║     ██║████╗  ██║██║   ██║╚██╗██╔╝    ██║   ██║██║
@@ -71,15 +70,15 @@ ok = """ - Version: 1.3
     + tm --history [reset]: Xem hoặc reset lịch sử lệnh
     + tm --kill [Số thứ tự/all]: Kill sessions/processes
     + tm --tmux list: Xem các tác vụ tmux
-    + tm --tmux connect [Số thứ tự/Tên]: Kết nối tmux
-    + tm --tmux delete [Số thứ tự/Tên]: Xoá tmux
-    + tm --tmux active gui [y/n] [Số thứ tự/Tên]: Bật/tắt Linux UI
-    + tm --list file: Liệt kê file/folder
-    + tm --cd [Số thứ tự/Tên]: cd đến folder
-    + tm --rm [Số thứ tự/Tên,...]: Xoá file/folder
-    + tm --mv [Số thứ tự/Tên,...] [Path]: Di chuyển file/folder
-    + tm --unzip [Số thứ tự/Tên,...]: Giải nén zip
-    + tm --extract [Số thứ tự/Tên,...]: Nén folder thành zip
+    + tm --tmux connect [Số thứ tự/tên]: Kết nối tmux
+    + tm --tmux delete [Số thứ tự/tên]: Xoá tác vụ tmux
+    + tm --tmux active gui [y/n] [Số thứ tự/tên]: Bật/tắt Linux UI cho tmux
+    + tm --list: Liệt kê file/folder
+    + tm --cd [Số thứ tự/tên]: Chuyển thư mục
+    + tm --rm [Số thứ tự/tên]: Xoá file/folder
+    + tm --mv [Số thứ tự/tên] [Path]: Di chuyển file/folder
+    + tm --unzip [Số thứ tự/tên]: Giải nén zip
+    + tm --extract [Số thứ tự/tên]: Giải nén folder vào zip
 
   -> Developer: Tran Hao Nguyen
   -> Alias: Bugs
@@ -119,9 +118,10 @@ def save_data(data, file_path):
 def rs():
     if os.path.exists(COMMANDS_FILE):
         os.remove(COMMANDS_FILE)
-    if os.path.exists(TMUX_UI_FILE):
-        os.remove(TMUX_UI_FILE)
-    print(f"🧹 Đã xoá dữ liệu: {COMMANDS_FILE}, {TMUX_UI_FILE}")
+        print(f"🧹 Đã xoá dữ liệu: {COMMANDS_FILE}")
+    if os.path.exists(TMUX_CONFIG_FILE):
+        os.remove(TMUX_CONFIG_FILE)
+        print(f"🧹 Đã xoá dữ liệu: {TMUX_CONFIG_FILE}")
     print("ℹ️ Đã reset toàn bộ dữ liệu.")
 
 def ls(data):
@@ -216,259 +216,298 @@ def kill_sessions(identifier):
             print(f"Số thứ tự không hợp lệ: {idx + 1}")
 
 def list_tmux_sessions():
-    tmux_sessions = run_command("tmux list-sessions 2>/dev/null").splitlines()
-    if not tmux_sessions:
+    tmux_data = load_data(TMUX_CONFIG_FILE)
+    tmux_procs = os.popen("tmux list-sessions 2>/dev/null").readlines()
+    sessions = []
+    for idx, line in enumerate(tmux_procs, 1):
+        session_name = line.split(':')[0]
+        created = tmux_data.get(session_name, {}).get("created", "Unknown")
+        activity = tmux_data.get(session_name, {}).get("activity", "Unknown")
+        gui_enabled = tmux_data.get(session_name, {}).get("gui_enabled", False)
+        uptime = run_command(f"tmux display-message -p -t {session_name} '#{{session_activity}}' 2>/dev/null").strip()
+        if uptime:
+            try:
+                uptime = datetime.datetime.fromtimestamp(int(uptime)).strftime("%H:%M - %Y/%m/%d")
+            except:
+                uptime = "Unknown"
+        sessions.append((session_name, created, activity, uptime, gui_enabled))
+    
+    if not sessions:
         print("ℹ️ Không có tmux session nào đang chạy.")
         return []
     
-    tmux_ui_config = load_data(TMUX_UI_FILE)
-    sessions_info = []
-    for idx, session in enumerate(tmux_sessions, 1):
-        name = session.split(':')[0]
-        created_time = run_command(f"tmux display-message -p -t {name} '#{session_created}' 2>/dev/null").strip() or "N/A"
-        if created_time != "N/A":
-            created_time = datetime.datetime.fromtimestamp(int(created_time)).strftime("%H:%M - %Y/%m/%d")
-        activity = run_command(f"tmux display-message -p -t {name} '#{pane_current_command}' 2>/dev/null").strip() or "N/A"
-        uptime = run_command(f"tmux display-message -p -t {name} '#{session_time}' 2>/dev/null").strip() or "N/A"
-        linux_ui = "Yes" if tmux_ui_config.get(name, False) else "No"
-        sessions_info.append((idx, name, created_time, activity, uptime, linux_ui))
-    
-    if sessions_info:
-        print("\n📋 Tmux sessions list:")
-        for idx, name, created_time, activity, uptime, linux_ui in sessions_info:
-            print(f"[{idx}] {name}")
-            print(f"  - Created: {created_time}")
-            print(f"  - Activity: {activity}")
-            print(f"  - Uptime: {uptime}")
-            print(f"  - Set Linux UI: {linux_ui}")
-    return sessions_info
+    print("\n📋 Danh sách tmux sessions:")
+    for idx, (name, created, activity, uptime, gui) in enumerate(sessions, 1):
+        print(f"[{idx}] {name}")
+        print(f" - Created: {created}")
+        print(f" - Activity: {activity}")
+        print(f" - Uptime: {uptime}")
+        print(f" - Set Linux UI: {'Yes' if gui else 'No'}")
+    return sessions
 
 def connect_tmux(identifier):
-    tmux_sessions = list_tmux_sessions()
-    if not tmux_sessions:
+    sessions = list_tmux_sessions()
+    if not sessions:
         return
     
-    try:
+    if identifier.isdigit():
         idx = int(identifier) - 1
-        if 0 <= idx < len(tmux_sessions):
-            name = tmux_sessions[idx][1]
-            os.system(f"tmux attach-session -t {name}")
+        if 0 <= idx < len(sessions):
+            session_name = sessions[idx][0]
+            os.system(f"tmux attach-session -t {session_name}")
         else:
             print("Số thứ tự không hợp lệ.")
-    except ValueError:
-        if any(identifier == session[1] for session in tmux_sessions):
-            os.system(f"tmux attach-session -t {identifier}")
-        else:
-            print("Tên session không tìm thấy.")
+    else:
+        for session in sessions:
+            if session[0] == identifier:
+                os.system(f"tmux attach-session -t {identifier}")
+                return
+        print("Không tìm thấy session.")
 
 def delete_tmux(identifier):
-    tmux_sessions = list_tmux_sessions()
-    if not tmux_sessions:
+    sessions = list_tmux_sessions()
+    if not sessions:
         return
     
-    try:
+    tmux_data = load_data(TMUX_CONFIG_FILE)
+    if identifier.isdigit():
         idx = int(identifier) - 1
-        if 0 <= idx < len(tmux_sessions):
-            name = tmux_sessions[idx][1]
-            os.system(f"tmux kill-session -t {name}")
-            tmux_ui_config = load_data(TMUX_UI_FILE)
-            if name in tmux_ui_config:
-                del tmux_ui_config[name]
-                save_data(tmux_ui_config, TMUX_UI_FILE)
-            print(f"Đã xoá tmux session: {name}")
+        if 0 <= idx < len(sessions):
+            session_name = sessions[idx][0]
+            os.system(f"tmux kill-session -t {session_name} 2>/dev/null")
+            if session_name in tmux_data:
+                del tmux_data[session_name]
+                save_data(tmux_data, TMUX_CONFIG_FILE)
+            print(f"Đã xoá tmux session: {session_name}")
         else:
             print("Số thứ tự không hợp lệ.")
-    except ValueError:
-        if any(identifier == session[1] for session in tmux_sessions):
-            os.system(f"tmux kill-session -t {identifier}")
-            tmux_ui_config = load_data(TMUX_UI_FILE)
-            if identifier in tmux_ui_config:
-                del tmux_ui_config[identifier]
-                save_data(tmux_ui_config, TMUX_UI_FILE)
-            print(f"Đã xoá tmux session: {identifier}")
-        else:
-            print("Tên session không tìm thấy.")
+    else:
+        for session in sessions:
+            if session[0] == identifier:
+                os.system(f"tmux kill-session -t {identifier} 2>/dev/null")
+                if identifier in tmux_data:
+                    del tmux_data[identifier]
+                    save_data(tmux_data, TMUX_CONFIG_FILE)
+                print(f"Đã xoá tmux session: {identifier}")
+                return
+        print("Không tìm thấy session.")
 
-def active_tmux_gui(active_state, identifier):
-    tmux_sessions = list_tmux_sessions()
-    if not tmux_sessions:
+def set_tmux_gui(active, identifier):
+    sessions = list_tmux_sessions()
+    if not sessions:
         return
     
-    try:
+    tmux_data = load_data(TMUX_CONFIG_FILE)
+    if identifier.isdigit():
         idx = int(identifier) - 1
-        if 0 <= idx < len(tmux_sessions):
-            name = tmux_sessions[idx][1]
-            tmux_ui_config = load_data(TMUX_UI_FILE)
-            tmux_ui_config[name] = active_state.lower() == 'y'
-            save_data(tmux_ui_config, TMUX_UI_FILE)
-            print(f"Đã cập nhật Linux UI cho {name}: {'Yes' if tmux_ui_config[name] else 'No'}")
+        if 0 <= idx < len(sessions):
+            session_name = sessions[idx][0]
+            tmux_data[session_name] = tmux_data.get(session_name, {})
+            tmux_data[session_name]["gui_enabled"] = active.lower() == 'y'
+            save_data(tmux_data, TMUX_CONFIG_FILE)
+            print(f"Đã {'bật' if active.lower() == 'y' else 'tắt'} Linux UI cho session: {session_name}")
         else:
             print("Số thứ tự không hợp lệ.")
-    except ValueError:
-        if any(identifier == session[1] for session in tmux_sessions):
-            tmux_ui_config = load_data(TMUX_UI_FILE)
-            tmux_ui_config[identifier] = active_state.lower() == 'y'
-            save_data(tmux_ui_config, TMUX_UI_FILE)
-            print(f"Đã cập nhật Linux UI cho {identifier}: {'Yes' if tmux_ui_config[identifier] else 'No'}")
-        else:
-            print("Tên session không tìm thấy.")
+    else:
+        for session in sessions:
+            if session[0] == identifier:
+                tmux_data[identifier] = tmux_data.get(identifier, {})
+                tmux_data[identifier]["gui_enabled"] = active.lower() == 'y'
+                save_data(tmux_data, TMUX_CONFIG_FILE)
+                print(f"Đã {'bật' if active.lower() == 'y' else 'tắt'} Linux UI cho session: {identifier}")
+                return
+        print("Không tìm thấy session.")
 
 def list_files():
     files = []
-    for item in sorted(glob.glob("*")):
-        if os.path.isdir(item):
+    for item in os.listdir():
+        path = os.path.join(os.getcwd(), item)
+        if os.path.isdir(path):
             files.append((item, "Folder"))
         else:
-            ext = os.path.splitext(item)[1].lower()
-            file_type = {
-                '.sh': 'Shell',
-                '.py': 'Python',
-                '.js': 'JavaScript',
-                '.zip': 'Zip'
-            }.get(ext, ext[1:].upper() if ext else 'File')
-            files.append((item, file_type))
+            ext = os.path.splitext(item)[1][1:] if os.path.splitext(item)[1] else "File"
+            files.append((item, ext or "File"))
     
     if not files:
-        print("ℹ️ Không có file/folder nào trong thư mục hiện tại.")
+        print("ℹ️ Thư mục hiện tại trống.")
         return []
     
-    print("\n📁 Danh sách File/Folder:")
-    for idx, (name, file_type) in enumerate(files, 1):
-        print(f"[{idx}] - {name} [{file_type}]")
+    print("\n📂 Danh sách file/folder:")
+    for idx, (name, ext) in enumerate(files, 1):
+        print(f"[{idx}] {name} [{ext}]")
     return files
 
-def cd_to_folder(identifier):
+def cd_to(identifier):
     files = list_files()
     if not files:
         return
     
-    try:
+    if identifier.isdigit():
         idx = int(identifier) - 1
-        if 0 <= idx < len(files) and files[idx][1] == "Folder":
-            os.chdir(files[idx][0])
-            print(f"Đã cd vào: {files[idx][0]}")
+        if 0 <= idx < len(files):
+            name, ext = files[idx]
+            if ext == "Folder":
+                os.chdir(os.path.join(os.getcwd(), name))
+                print(f"Đã chuyển đến thư mục: {name}")
+            else:
+                print("Không phải thư mục.")
         else:
-            print("Số thứ tự không hợp lệ hoặc không phải folder.")
-    except ValueError:
-        if any(identifier == f[0] and f[1] == "Folder" for f in files):
-            os.chdir(identifier)
-            print(f"Đã cd vào: {identifier}")
-        else:
-            print("Tên folder không tìm thấy hoặc không phải folder.")
+            print("Số thứ tự không hợp lệ.")
+    else:
+        for name, ext in files:
+            if name == identifier and ext == "Folder":
+                os.chdir(os.path.join(os.getcwd(), name))
+                print(f"Đã chuyển đến thư mục: {name}")
+                return
+        print("Không tìm thấy thư mục.")
 
 def remove_files(identifiers):
     files = list_files()
     if not files:
         return
     
-    indices = [int(x.strip()) - 1 for x in identifiers.split(',') if x.strip().isdigit()]
-    names = [x.strip() for x in identifiers.split(',') if not x.strip().isdigit()]
+    indices = [int(i) - 1 for i in identifiers.replace(' ', '').split(',') if i.isdigit()]
+    names = identifiers.split(',') if not identifiers.replace(' ', '').isdigit() else []
     
     for idx in indices:
         if 0 <= idx < len(files):
+            name, _ = files[idx]
+            path = os.path.join(os.getcwd(), name)
             try:
-                if files[idx][1] == "Folder":
-                    shutil.rmtree(files[idx][0])
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
                 else:
-                    os.remove(files[idx][0])
-                print(f"Đã xóa: {files[idx][0]}")
+                    os.remove(path)
+                print(f"Đã xoá: {name}")
             except Exception as e:
-                print(f"Không thể xóa {files[idx][0]}: {e}")
+                print(f"Không thể xoá {name}: {e}")
+        else:
+            print(f"Số thứ tự không hợp lệ: {idx + 1}")
     
     for name in names:
-        if any(name == f[0] for f in files):
+        name = name.strip()
+        path = os.path.join(os.getcwd(), name)
+        if os.path.exists(path):
             try:
-                if os.path.isdir(name):
-                    shutil.rmtree(name)
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
                 else:
-                    os.remove(name)
-                print(f"Đã xóa: {name}")
+                    os.remove(path)
+                print(f"Đã xoá: {name}")
             except Exception as e:
-                print(f"Không thể xóa {name}: {e}")
+                print(f"Không thể xoá {name}: {e}")
+        else:
+            print(f"Không tìm thấy: {name}")
 
-def move_files(items, dest_path):
+def move_files(identifiers, destination):
     files = list_files()
     if not files:
         return
     
-    if not os.path.isdir(dest_path):
-        print(f"Đường dẫn đích không tồn tại hoặc không phải folder: {dest_path}")
+    if not os.path.exists(destination):
+        print(f"Thư mục đích không tồn tại: {destination}")
         return
     
-    indices = [int(x.strip()) - 1 for x in items.split(',') if x.strip().isdigit()]
-    names = [x.strip() for x in items.split(',') if not x.strip().isdigit()]
+    indices = [int(i) - 1 for i in identifiers.replace(' ', '').split(',') if i.isdigit()]
+    names = identifiers.split(',') if not identifiers.replace(' ', '').isdigit() else []
     
     for idx in indices:
         if 0 <= idx < len(files):
+            name, _ = files[idx]
+            src = os.path.join(os.getcwd(), name)
+            dst = os.path.join(destination, name)
             try:
-                shutil.move(files[idx][0], os.path.join(dest_path, files[idx][0]))
-                print(f"Đã di chuyển: {files[idx][0]} đến {dest_path}")
-            except Exception as e:
-                print(f"Không thể di chuyển {files[idx][0]}: {e}")
-    
-    for name in names:
-        if any(name == f[0] for f in files):
-            try:
-                shutil.move(name, os.path.join(dest_path, name))
-                print(f"Đã di chuyển: {name} đến {dest_path}")
+                shutil.move(src, dst)
+                print(f"Đã di chuyển {name} đến {destination}")
             except Exception as e:
                 print(f"Không thể di chuyển {name}: {e}")
+        else:
+            print(f"Số thứ tự không hợp lệ: {idx + 1}")
+    
+    for name in names:
+        name = name.strip()
+        src = os.path.join(os.getcwd(), name)
+        dst = os.path.join(destination, name)
+        if os.path.exists(src):
+            try:
+                shutil.move(src, dst)
+                print(f"Đã di chuyển {name} đến {destination}")
+            except Exception as e:
+                print(f"Không thể di chuyển {name}: {e}")
+        else:
+            print(f"Không tìm thấy: {name}")
 
 def unzip_files(identifiers):
     files = list_files()
     if not files:
         return
     
-    indices = [int(x.strip()) - 1 for x in identifiers.split(',') if x.strip().isdigit()]
-    names = [x.strip() for x in identifiers.split(',') if not x.strip().isdigit()]
+    indices = [int(i) - 1 for i in identifiers.replace(' ', '').split(',') if i.isdigit()]
+    names = identifiers.split(',') if not identifiers.replace(' ', '').isdigit() else []
     
     for idx in indices:
-        if 0 <= idx < len(files) and files[idx][1] == "Zip":
-            try:
-                zip_path = files[idx][0]
-                folder_name = os.path.splitext(zip_path)[0]
-                os.makedirs(folder_name, exist_ok=True)
-                os.system(f"unzip -q '{zip_path}' -d '{folder_name}'")
-                print(f"Đã giải nén: {zip_path} -> {folder_name}")
-            except Exception as e:
-                print(f"Không thể giải nén {files[idx][0]}: {e}")
+        if 0 <= idx < len(files):
+            name, ext = files[idx]
+            if ext.lower() == "zip":
+                try:
+                    output_dir = os.path.splitext(name)[0]
+                    os.makedirs(output_dir, exist_ok=True)
+                    run_command(f"unzip -o {name} -d {output_dir}")
+                    print(f"Đã giải nén {name} vào {output_dir}")
+                except Exception as e:
+                    print(f"Không thể giải nén {name}: {e}")
+            else:
+                print(f"{name} không phải file zip.")
+        else:
+            print(f"Số thứ tự không hợp lệ: {idx + 1}")
     
     for name in names:
-        if any(name == f[0] and f[1] == "Zip" for f in files):
+        name = name.strip()
+        if os.path.exists(name) and name.lower().endswith('.zip'):
             try:
-                folder_name = os.path.splitext(name)[0]
-                os.makedirs(folder_name, exist_ok=True)
-                os.system(f"unzip -q '{name}' -d '{folder_name}'")
-                print(f"Đã giải nén: {name} -> {folder_name}")
+                output_dir = os.path.splitext(name)[0]
+                os.makedirs(output_dir, exist_ok=True)
+                run_command(f"unzip -o {name} -d {output_dir}")
+                print(f"Đã giải nén {name} vào {output_dir}")
             except Exception as e:
                 print(f"Không thể giải nén {name}: {e}")
+        else:
+            print(f"Không tìm thấy hoặc {name} không phải file zip.")
 
 def extract_to_zip(identifiers):
     files = list_files()
     if not files:
         return
     
-    indices = [int(x.strip()) - 1 for x in identifiers.split(',') if x.strip().isdigit()]
-    names = [x.strip() for x in identifiers.split(',') if not x.strip().isdigit()]
+    indices = [int(i) - 1 for i in identifiers.replace(' ', '').split(',') if i.isdigit()]
+    names = identifiers.split(',') if not identifiers.replace(' ', '').isdigit() else []
     
     for idx in indices:
-        if 0 <= idx < len(files) and files[idx][1] == "Folder":
-            try:
-                folder_name = files[idx][0]
-                zip_name = f"{folder_name}.zip"
-                shutil.make_archive(folder_name, 'zip', folder_name)
-                print(f"Đã nén: {folder_name} -> {zip_name}")
-            except Exception as e:
-                print(f"Không thể nén {files[idx][0]}: {e}")
+        if 0 <= idx < len(files):
+            name, ext = files[idx]
+            if ext == "Folder":
+                try:
+                    output_zip = f"{name}.zip"
+                    run_command(f"zip -r {output_zip} {name}")
+                    print(f"Đã nén {name} vào {output_zip}")
+                except Exception as e:
+                    print(f"Không thể nén {name}: {e}")
+            else:
+                print(f"{name} không phải thư mục.")
+        else:
+            print(f"Số thứ tự không hợp lệ: {idx + 1}")
     
     for name in names:
-        if any(name == f[0] and f[1] == "Folder" for f in files):
+        name = name.strip()
+        if os.path.isdir(name):
             try:
-                zip_name = f"{name}.zip"
-                shutil.make_archive(name, 'zip', name)
-                print(f"Đã nén: {name} -> {zip_name}")
+                output_zip = f"{name}.zip"
+                run_command(f"zip -r {output_zip} {name}")
+                print(f"Đã nén {name} vào {output_zip}")
             except Exception as e:
                 print(f"Không thể nén {name}: {e}")
+        else:
+            print(f"Không tìm thấy hoặc {name} không phải thư mục.")
 
 def get_pr():
     cwd = os.getcwd().replace(os.path.expanduser("~"), "~")
@@ -478,7 +517,7 @@ def get_pr():
 
 def hienthi():
     width = 48
-    height = 20
+    height = 16
     title = "☑️ MENU LINUX UI"
     border_color = "\x1b[38;2;137;180;250m"
     text_color = "\x1b[1;37m"
@@ -498,12 +537,8 @@ def hienthi():
         ("7 - tm --reset", "Reset dữ liệu"),  
         ("8 - tm --history", "Xem/reset lịch sử lệnh"),  
         ("9 - tm --kill", "Kill sessions/processes"),  
-        ("10 - tm --tmux list", "Xem các tác vụ tmux"),  
-        ("11 - tm --tmux connect", "Kết nối tmux session"),  
-        ("12 - tm --tmux delete", "Xoá tmux session"),  
-        ("13 - tm --tmux active gui", "Bật/tắt Linux UI"),  
-        ("14 - tm --list file", "Liệt kê file/folder"),  
-        ("15 - tm --cd", "cd đến folder"),  
+        ("10 - tm --tmux list", "Xem tmux sessions"),  
+        ("11 - tm --list", "Liệt kê file/folder"),  
         ("0 - exit", "Thoát UI")  
     ]
 
@@ -604,45 +639,62 @@ def menu(data):
             kill_sessions(identifier)
         elif c in ["10", "tm --tmux list"]:
             list_tmux_sessions()
-        elif c in ["11", "tm --tmux connect"]:
-            list_tmux_sessions()
-            identifier = input("Nhập số thứ tự hoặc tên session: ").strip()
-            connect_tmux(identifier)
-        elif c in ["12", "tm --tmux delete"]:
-            list_tmux_sessions()
-            identifier = input("Nhập số thứ tự hoặc tên session cần xoá: ").strip()
-            delete_tmux(identifier)
-        elif c in ["13", "tm --tmux active gui"] or c.startswith("tm --tmux active gui "):
-            args = c.replace("tm --tmux active gui", "").strip().split()
-            if len(args) < 2:
+        elif c.startswith("tm --tmux connect"):
+            identifier = c.replace("tm --tmux connect", "").strip()
+            if not identifier:
                 list_tmux_sessions()
-                active_state = input("Bật Linux UI (y/n): ").strip()
+                identifier = input("Nhập số thứ tự hoặc tên session: ").strip()
+            connect_tmux(identifier)
+        elif c.startswith("tm --tmux delete"):
+            identifier = c.replace("tm --tmux delete", "").strip()
+            if not identifier:
+                list_tmux_sessions()
+                identifier = input("Nhập số thứ tự hoặc tên session: ").strip()
+            delete_tmux(identifier)
+        elif c.startswith("tm --tmux active gui"):
+            parts = c.replace("tm --tmux active gui", "").strip().split()
+            if len(parts) < 2:
+                list_tmux_sessions()
+                active = input("Bật (y) hay tắt (n) Linux UI: ").strip()
                 identifier = input("Nhập số thứ tự hoặc tên session: ").strip()
             else:
-                active_state, identifier = args[0], args[1]
-            active_tmux_gui(active_state, identifier)
-        elif c in ["14", "tm --list file"]:
+                active, identifier = parts[0], parts[1]
+            set_tmux_gui(active, identifier)
+        elif c in ["11", "tm --list"]:
             list_files()
-        elif c in ["15", "tm --cd"]:
-            list_files()
-            identifier = input("Nhập số thứ tự hoặc tên folder: ").strip()
-            cd_to_folder(identifier)
-        elif c.startswith("tm --rm "):
-            identifiers = c.replace("tm --rm", "").strip()
-            remove_files(identifiers)
-        elif c.startswith("tm --mv "):
-            args = c.replace("tm --mv", "").strip().rsplit(" ", 1)
-            if len(args) != 2:
-                print("Cú pháp: tm --mv [Số thứ tự/Tên,...] [Đường dẫn đích]")
+        elif c.startswith("tm --cd"):
+            identifier = c.replace("tm --cd", "").strip()
+            if not identifier:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên thư mục: ").strip()
+            cd_to(identifier)
+        elif c.startswith("tm --rm"):
+            identifier = c.replace("tm --rm", "").strip()
+            if not identifier:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên file/folder (cách nhau bằng dấu phẩy): ").strip()
+            remove_files(identifier)
+        elif c.startswith("tm --mv"):
+            parts = c.replace("tm --mv", "").strip().split()
+            if len(parts) < 2:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên file/folder (cách nhau bằng dấu phẩy): ").strip()
+                destination = input("Nhập đường dẫn đích: ").strip()
             else:
-                items, dest_path = args
-                move_files(items, dest_path)
-        elif c.startswith("tm --unzip "):
-            identifiers = c.replace("tm --unzip", "").strip()
-            unzip_files(identifiers)
-        elif c.startswith("tm --extract "):
-            identifiers = c.replace("tm --extract", "").strip()
-            extract_to_zip(identifiers)
+                identifier, destination = parts[0], parts[1]
+            move_files(identifier, destination)
+        elif c.startswith("tm --unzip"):
+            identifier = c.replace("tm --unzip", "").strip()
+            if not identifier:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên file zip (cách nhau bằng dấu phẩy): ").strip()
+            unzip_files(identifier)
+        elif c.startswith("tm --extract"):
+            identifier = c.replace("tm --extract", "").strip()
+            if not identifier:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên thư mục (cách nhau bằng dấu phẩy): ").strip()
+            extract_to_zip(identifier)
         elif c.startswith("cd "):
             try:
                 path = c.split("cd ", 1)[1].strip()
@@ -778,41 +830,52 @@ def shell():
             identifier = inp.replace("tm --tmux delete", "").strip()
             if not identifier:
                 list_tmux_sessions()
-                identifier = input("Nhập số thứ tự hoặc tên session cần xoá: ").strip()
+                identifier = input("Nhập số thứ tự hoặc tên session: ").strip()
             delete_tmux(identifier)
         elif inp.startswith("tm --tmux active gui"):
-            args = inp.replace("tm --tmux active gui", "").strip().split()
-            if len(args) < 2:
+            parts = inp.replace("tm --tmux active gui", "").strip().split()
+            if len(parts) < 2:
                 list_tmux_sessions()
-                active_state = input("Bật Linux UI (y/n): ").strip()
+                active = input("Bật (y) hay tắt (n) Linux UI: ").strip()
                 identifier = input("Nhập số thứ tự hoặc tên session: ").strip()
             else:
-                active_state, identifier = args[0], args[1]
-            active_tmux_gui(active_state, identifier)
-        elif inp == "tm --list file":
+                active, identifier = parts[0], parts[1]
+            set_tmux_gui(active, identifier)
+        elif inp == "tm --list":
             list_files()
         elif inp.startswith("tm --cd"):
             identifier = inp.replace("tm --cd", "").strip()
             if not identifier:
                 list_files()
-                identifier = input("Nhập số thứ tự hoặc tên folder: ").strip()
-            cd_to_folder(identifier)
+                identifier = input("Nhập số thứ tự hoặc tên thư mục: ").strip()
+            cd_to(identifier)
         elif inp.startswith("tm --rm"):
-            identifiers = inp.replace("tm --rm", "").strip()
-            remove_files(identifiers)
+            identifier = inp.replace("tm --rm", "").strip()
+            if not identifier:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên file/folder (cách nhau bằng dấu phẩy): ").strip()
+            remove_files(identifier)
         elif inp.startswith("tm --mv"):
-            args = inp.replace("tm --mv", "").strip().rsplit(" ", 1)
-            if len(args) != 2:
-                print("Cú pháp: tm --mv [Số thứ tự/Tên,...] [Đường dẫn đích]")
+            parts = inp.replace("tm --mv", "").strip().split()
+            if len(parts) < 2:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên file/folder (cách nhau bằng dấu phẩy): ").strip()
+                destination = input("Nhập đường dẫn đích: ").strip()
             else:
-                items, dest_path = args
-                move_files(items, dest_path)
+                identifier, destination = parts[0], parts[1]
+            move_files(identifier, destination)
         elif inp.startswith("tm --unzip"):
-            identifiers = inp.replace("tm --unzip", "").strip()
-            unzip_files(identifiers)
+            identifier = inp.replace("tm --unzip", "").strip()
+            if not identifier:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên file zip (cách nhau bằng dấu phẩy): ").strip()
+            unzip_files(identifier)
         elif inp.startswith("tm --extract"):
-            identifiers = inp.replace("tm --extract", "").strip()
-            extract_to_zip(identifiers)
+            identifier = inp.replace("tm --extract", "").strip()
+            if not identifier:
+                list_files()
+                identifier = input("Nhập số thứ tự hoặc tên thư mục (cách nhau bằng dấu phẩy): ").strip()
+            extract_to_zip(identifier)
         elif inp.startswith("cd "):
             try:
                 path = inp.split("cd ", 1)[1].strip()
@@ -857,4 +920,4 @@ uptime
 python3 ~/custom_menu.py display_system_info
 echo -e "\033[1;32m✅ Cài đặt hoàn tất! Bạn có thể khởi động lại terminal để trải nghiệm giao diện shell hiện đại!\033[0m"
 source ~/.bashrc
-exit
+exit 
