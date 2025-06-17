@@ -345,8 +345,9 @@ def shell():
             ls(data)
         elif inp.startswith("tm --action"):
             identifier = inp.replace("tm --action", "").strip()
-            if not identifierthorized
-            identifier = input("Nhập số thứ tự hoặc tên lệnh: ").strip()
+            if not identifier:
+                ls(data)
+                identifier = input("Nhập số thứ tự hoặc tên lệnh: ").strip()
             if identifier.isdigit():
                 idx = int(identifier) - 1
                 configs = list(data.items())
@@ -421,95 +422,6 @@ def shell():
                 print("Không tìm thấy.")
         else:
             try:
-                os.system.stdout.flush()  # Flush stdout to ensure proper output
-                os.system(inp)
-            except Exception as e:
-                print(f"Lỗi khitemp = inp.replace("tm --action", "").strip()
-            if not identifier:
-                ls(data)
-                identifier = input("Nhập số thứ tự hoặc tên lệnh: ").strip()
-            if identifier.isdigit():
-                idx = int(identifier) - 1
-                configs = list(data.items())
-                if 0 <= idx < len(configs):
-                    name = configs[idx][0]
-                    data[name] = input("Tác vụ mới: ").strip()
-                    save_data(data, COMMANDS_FILE)
-                    print("Đã cập nhật.")
-                else:
-                    print("Số thứ tự không hợp lệ.")
-            else:
-                if identifier in data:
-                    data[identifier] = input("Tác vụ mới: ").strip()
-                    save_data(data, COMMANDS_FILE)
-                    print("Đã cập nhật.")
-                else:
-                    print("Không tìm thấy lệnh.")
-        elif inp.startswith("tm --rename"):
-            identifier = inp.replace("tm --rename", "").strip()
-            if not identifier:
-                ls(data)
-                identifier = input("Nhập số thứ tự hoặc tên cũ: ").strip()
-            if identifier.isdigit():
-                idx = int(identifier) - 1
-                configs = list(data.items())
-                if 0 <= idx < len(configs):
-                    name = configs[idx][0]
-                    new_name = input("Tên mới: ").strip()
-                    if new_name not in data:
-                        data[new_name] = data.pop(name)
-                        save_data(data, COMMANDS_FILE)
-                        print("Đã đổi tên.")
-                    else:
-                        print("Tên mới đã tồn tại.")
-                else:
-                    print("Số thứ tự không hợp lệ.")
-            else:
-                if identifier in data:
-                    new_name = input("Tên mới: ").strip()
-                    if new_name not in data:
-                        data[new_name] = data.pop(identifier)
-                        save_data(data, COMMANDS_FILE)
-                        print("Đã đổi tên.")
-                    else:
-                        print("Tên mới đã tồn tại.")
-                else:
-                    print("Không tìm thấy lệnh.")
-        elif inp == "tm --prompt":
-            p = input("Prompt mới: ").strip()
-            with open(os.path.expanduser("~/.bashrc"), "a") as f:
-                f.write(f"\nexport PS1='{p} '\n")
-            print("Đã đổi prompt -> gõ source ~/.bashrc.")
-        elif inp == "tm --reset":
-            rs()
-            break
-        elif inp.startswith("tm --history"):
-            action = inp.replace("tm --history", "").strip()
-            display_history(action if action else None)
-        elif inp.startswith("tm --kill"):
-            identifier = inp.replace("tm --kill", "").strip()
-            if not identifier:
-                list_sessions()
-                identifier = input("Nhập số thứ tự cách nhau bằng dấu phẩy hoặc all để kill tất cả: ").strip()
-            kill_sessions(identifier)
-        elif inp.startswith("cd "):
-            try:
-                path = inp.split("cd ", 1)[1].strip()
-                if not path:
-                    path = os.path.expanduser("~")
-                os.chdir(os.path.expanduser(path))
-            except Exception as e:
-                print(f"Không thể cd: {e}")
-        elif inp in data:
-            os.system(data[inp])
-        elif inp.endswith(".custom"):
-            k = inp.replace(".custom", "")
-            if k in data:
-                os.system(data[k])
-            else:
-                print("Không tìm thấy.")
-        else:
-            try:
                 os.system(inp)
             except Exception as e:
                 print(f"Lỗi khi thực thi: {e}")
@@ -518,8 +430,42 @@ if __name__ == "__main__":
     shell()
 EOF
 
-# Add system info display function to .bashrc
-sed -i '/# Custom lệnh từ file json/,+20d' ~/.bashrc
+# Define display_system_info function in a temporary script to use immediately
+cat > /tmp/display_system_info.sh << 'EOF'
+banner="████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
+╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝      ██╔═══██╗██╔════╝
+   ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝ █████╗██║   ██║███████╗
+   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗ ╚════╝██║   ██║╚════██║
+   ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗      ╚██████╔╝███████║
+   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝       ╚═════╝ ╚══════╝
+                                                                            "
+
+ok=" - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
+
+display_system_info() {
+    clear
+    echo "$banner"
+    neofetch
+    load=$(uptime | awk -F 'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
+    processes=$(ps aux | wc -l)
+    disk_usage=$(df -h / | tail -1 | awk '{print $5 " of " $2}')
+    users=$(who | wc -l)
+    mem_usage=$(free -m | awk '/Mem:/ {printf "%.0f%%", $3/$2*100}')
+    swap_usage=$(free -m | awk '/Swap:/ {if ($2 == 0) print "0%"; else printf "%.0f%%", $3/$2*100}')
+    ip=$(ip addr show ens160 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 || echo "N/A")
+    echo "System load:  $load                Processes:               $processes"
+    echo "Usage of /:   $disk_usage   Users logged in:         $users"
+    echo "Memory usage: $mem_usage                 IPv4 address for ens160: $ip"
+    echo "Swap usage:   $swap_usage"
+    echo -e "$ok"
+}
+EOF
+
+# Source the temporary script to define display_system_info
+source /tmp/display_system_info.sh
+
+# Add to .bashrc
+sed -i '/# Custom lệnh từ file json/,+50d' ~/.bashrc
 cat >> ~/.bashrc << 'EOF'
 function run_custom() {
   cmd=$(jq -r --arg k "$1" ".[\$k]" ~/.custom_commands.json 2>/dev/null)
@@ -545,15 +491,9 @@ function display_system_info() {
     echo "Usage of /:   $disk_usage   Users logged in:         $users"
     echo "Memory usage: $mem_usage                 IPv4 address for ens160: $ip"
     echo "Swap usage:   $swap_usage"
-    ok=" - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
     echo -e "$ok"
 }
 
-alias -s custom=run_custom
-alias menu='python3 ~/custom_menu.py'
-alias sh='python3 ~/custom_menu.py'
-
-# Store the banner in .bashrc for reuse
 banner="████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗       ██████╗ ███████╗
 ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝      ██╔═══██╗██╔════╝
    ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝ █████╗██║   ██║███████╗
@@ -562,8 +502,11 @@ banner="████████╗███████╗██████╗
    ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝       ╚═════╝ ╚══════╝
                                                                             "
 
-clear
-display_system_info
+ok=" - Version: 1.2\n - Lệnh hỗ trợ:\n    + menu: Danh sách lệnh tiện ích\n    + uiexit: Thoát UI\n    + sh: Đăng nhập lại UI\n    + tm --new: Tạo lệnh mới\n    + tm --delete [Số thứ tự/tên lệnh]: Xoá lệnh\n    + tm --cmdlist: Danh sách lệnh\n    + tm --action [Số thứ tự/tên lệnh]: Đổi tác vụ\n    + tm --rename [Số thứ tự/tên lệnh]: Đổi tên lệnh\n    + tm --prompt: Thay prompt\n    + tm --reset: Reset dữ liệu\n    + tm --history [reset]: Xem hoặc reset lịch sử lệnh\n    + tm --kill [Số thứ tự/all]: Kill sessions/processes\n\n  -> Developer: Tran Hao Nguyen\n  -> Alias: Bugs\n  -> Description: Linux UI - Utilities,..."
+
+alias -s custom=run_custom
+alias menu='python3 ~/custom_menu.py'
+alias sh='python3 ~/custom_menu.py'
 EOF
 
 # Display system info on setup completion
@@ -572,4 +515,8 @@ uptime
 display_system_info
 echo -e "\033[1;32m✅ Cài đặt hoàn tất! Bạn có thể khởi động lại terminal để trải nghiệm giao diện shell hiện đại!\033[0m"
 echo -e "Nhập 'menu' hoặc 'sh' để vào UI, 'uiexit' để thoát UI."
+
+# Clean up temporary script
+rm -f /tmp/display_system_info.sh
+
 exit
